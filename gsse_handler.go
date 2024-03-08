@@ -15,7 +15,9 @@ func Handle(fn func(*Client)) func(*ghttp.Request) {
 
 		var (
 			keepAliveCtx    context.Context
-			keepAliveCancel context.CancelFunc = func() {}
+			keepAliveCancel context.CancelFunc = func() {
+				// empty func if not keep alive
+			}
 		)
 		if client.keepAlive {
 			keepAliveCtx, keepAliveCancel =
