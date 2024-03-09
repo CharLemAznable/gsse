@@ -1,12 +1,17 @@
 package gsse_test
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/CharLemAznable/gsse"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gctx"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/gogf/gf/v2/text/gstr"
 	"github.com/gogf/gf/v2/util/guid"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -60,6 +65,40 @@ func Test_SendMessageWithId(t *testing.T) {
 	})
 }
 
+type eventSource struct {
+	Lines chan string
+	Done  chan error
+}
+
+func newEventSource(url string) *eventSource {
+	es := &eventSource{
+		Lines: make(chan string),
+		Done:  make(chan error),
+	}
+
+	go func() {
+		resp, err := http.Get(url)
+		if err != nil {
+			es.Done <- err
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			es.Lines <- scanner.Text()
+		}
+
+		if err := scanner.Err(); err != nil {
+			es.Done <- err
+		} else {
+			es.Done <- io.EOF
+		}
+	}()
+
+	return es
+}
+
 func Test_SendEvent(t *testing.T) {
 	clientCh := make(chan *gsse.Client, 1)
 	s := g.Server(guid.S())
@@ -74,8 +113,7 @@ func Test_SendEvent(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
 		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
-		client := g.Client()
-		client.SetPrefix(prefix)
+		es := newEventSource(prefix + "/sse")
 
 		go func() {
 			sseClient := <-clientCh
@@ -84,12 +122,19 @@ func Test_SendEvent(t *testing.T) {
 		}()
 		finish := make(chan interface{}, 1)
 		go func() {
-			response, err := client.Get(gctx.New(), "/sse")
-			if err != nil {
-				return
+			var buffer bytes.Buffer
+			for {
+				select {
+				case line := <-es.Lines:
+					buffer.WriteString(line)
+					//buffer.WriteString("\n")
+				case <-es.Done:
+					t.Assert(gstr.TrimStr(buffer.String(), ":"),
+						"event:testdata:send event")
+					finish <- ""
+					return
+				}
 			}
-			response.RawDump()
-			finish <- ""
 		}()
 		<-finish
 	})
@@ -109,8 +154,7 @@ func Test_SendEventWithId(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	gtest.C(t, func(t *gtest.T) {
 		prefix := fmt.Sprintf("http://127.0.0.1:%d", s.GetListenedPort())
-		client := g.Client()
-		client.SetPrefix(prefix)
+		es := newEventSource(prefix + "/sse")
 
 		go func() {
 			sseClient := <-clientCh
@@ -120,12 +164,19 @@ func Test_SendEventWithId(t *testing.T) {
 		}()
 		finish := make(chan interface{}, 1)
 		go func() {
-			response, err := client.Get(gctx.New(), "/sse")
-			if err != nil {
-				return
+			var buffer bytes.Buffer
+			for {
+				select {
+				case line := <-es.Lines:
+					buffer.WriteString(line)
+					//buffer.WriteString("\n")
+				case <-es.Done:
+					t.Assert(gstr.TrimStr(buffer.String(), ":"),
+						"event:testdata:send eventid:2")
+					finish <- ""
+					return
+				}
 			}
-			response.RawDump()
-			finish <- ""
 		}()
 		<-finish
 	})

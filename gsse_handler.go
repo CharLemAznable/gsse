@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Handle wraps func(*gsse.Client) to func(*ghttp.Request), use by ghttp.Server.BindHandler().
 func Handle(fn func(*Client)) func(*ghttp.Request) {
 	return func(request *ghttp.Request) {
 		client := newClient(request)
@@ -24,7 +25,7 @@ func Handle(fn func(*Client)) func(*ghttp.Request) {
 				context.WithCancel(context.Background())
 		}
 		go func() {
-			<-client.Context.Done()
+			<-client.Context().Done()
 			if client.onClose != nil {
 				go client.onClose(client)
 			}

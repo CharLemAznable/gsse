@@ -5,12 +5,9 @@ import (
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
+// Client wraps the SSE(Server-Sent Event) ghttp.Request and provides SSE APIs
 type Client struct {
-	Context  context.Context
-	Request  *ghttp.Request
-	Response *ghttp.Response
-	Server   *ghttp.Server
-
+	request   *ghttp.Request
 	cancel    context.CancelFunc
 	onClose   func(*Client)
 	keepAlive bool
